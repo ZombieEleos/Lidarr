@@ -211,7 +211,7 @@ namespace NzbDrone.Core.Datastore.Migration
                         
                             toInsert = new AlbumRelease {
                                     AlbumId = albumId,
-                                    ForeignReleaseId = albumRelease.Id.IsNotNullOrWhiteSpace() ? albumRelease.Id : albumId,
+                                    ForeignReleaseId = albumRelease.Id.IsNotNullOrWhiteSpace() ? albumRelease.Id : albumId.ToString(),
                                     Title = albumRelease.Title.IsNotNullOrWhiteSpace() ? albumRelease.Title : "",
                                     Status = "",
                                     Duration = 0,
