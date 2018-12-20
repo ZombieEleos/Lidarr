@@ -112,7 +112,11 @@ namespace NzbDrone.Core.MediaFiles
             foreach (var group in tracks.GroupBy(e => e.TrackFileId))
             {
                 var tracksInFile = group.Select(e => e).ToList();
-                var trackFile = tracksInFile.First().TrackFile;
+                var trackFile = tracksInFile.First().TrackFile.Value;
+                if (!Path.Combine(message.Artist.Path, trackFile.RelativePath).StartsWith(message.Path))
+                {
+                    continue;
+                }
 
                 trackFiles.Add(trackFile);
 

@@ -63,6 +63,9 @@ CleanFolder()
     echo "Removing dylib files"
     find $path -name "*.dylib" -exec rm "{}" \;
 
+    echo "Removing MacOS fpcalc"
+    rm "$path/fpcalc"
+
     echo "Removing Empty folders"
     find $path -depth -empty -type d -exec rm -r "{}" \;
 }
@@ -171,9 +174,10 @@ PackageMono()
     rm -f $outputFolderLinux/ServiceUninstall.*
     rm -f $outputFolderLinux/ServiceInstall.*
 
-    echo "Removing native windows binaries Sqlite, MediaInfo"
+    echo "Removing native windows binaries Sqlite, MediaInfo, fpcalc"
     rm -f $outputFolderLinux/sqlite3.*
     rm -f $outputFolderLinux/MediaInfo.*
+    rm -f $outputFolderLinux/fpcalc*
 
     echo "Adding Lidarr.Core.dll.config (for dllmap)"
     cp $sourceFolder/NzbDrone.Core/Lidarr.Core.dll.config $outputFolderLinux
@@ -216,6 +220,9 @@ PackageMacOS()
     echo "Adding MediaInfo dylib"
     cp $sourceFolder/Libraries/MediaInfo/*.dylib $outputFolderMacOS
 
+    echo "Adding fpcalc"
+    cp $sourceFolder/Libraries/Fpcalc/chromaprint-fpcalc-1.4.3-macos-x86_64/fpcalc $outputFolderMacOS
+
     ProgressEnd 'Creating MacOS Package'
 }
 
@@ -241,6 +248,9 @@ PackageMacOSApp()
     echo "Adding MediaInfo dylib"
     cp $sourceFolder/Libraries/MediaInfo/*.dylib $outputFolderMacOSApp/Lidarr.app/Contents/MacOS
 
+    echo "Adding fpcalc"
+    cp $sourceFolder/Libraries/Fpcalc/chromaprint-fpcalc-1.4.3-macos-x86_64/fpcalc $outputFolderMacOS
+
     echo "Removing Update Folder"
     rm -r $outputFolderMacOSApp/Lidarr.app/Contents/MacOS/Lidarr.Update
 
@@ -263,6 +273,7 @@ PackageTests()
     fi
 
     cp $outputFolder/*.dll $testPackageFolder
+    cp $outputFolder/*.exe $testPackageFolder
     cp ./*.sh $testPackageFolder
 
     echo "Creating MDBs for tests"

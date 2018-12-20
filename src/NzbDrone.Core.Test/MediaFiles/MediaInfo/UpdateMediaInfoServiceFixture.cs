@@ -70,7 +70,7 @@ namespace NzbDrone.Core.Test.MediaFiles.MediaInfo
             GivenFileExists();
             GivenSuccessfulScan();
 
-            Subject.Handle(new ArtistScannedEvent(_artist));
+            Subject.Handle(new ArtistScannedEvent(_artist, _artist.Path));
 
             Mocker.GetMock<IVideoFileInfoReader>()
                   .Verify(v => v.GetMediaInfo(Path.Combine(_artist.Path, "media.flac")), Times.Exactly(2));
@@ -96,7 +96,7 @@ namespace NzbDrone.Core.Test.MediaFiles.MediaInfo
             GivenFileExists();
             GivenSuccessfulScan();
 
-            Subject.Handle(new ArtistScannedEvent(_artist));
+            Subject.Handle(new ArtistScannedEvent(_artist, _artist.Path));
 
             Mocker.GetMock<IVideoFileInfoReader>()
                   .Verify(v => v.GetMediaInfo(Path.Combine(_artist.Path, "media.flac")), Times.Exactly(2));
@@ -122,7 +122,7 @@ namespace NzbDrone.Core.Test.MediaFiles.MediaInfo
             GivenFileExists();
             GivenSuccessfulScan();
 
-            Subject.Handle(new ArtistScannedEvent(_artist));
+            Subject.Handle(new ArtistScannedEvent(_artist, _artist.Path));
 
             Mocker.GetMock<IVideoFileInfoReader>()
                   .Verify(v => v.GetMediaInfo(Path.Combine(_artist.Path, "media.flac")), Times.Exactly(3));
@@ -145,7 +145,7 @@ namespace NzbDrone.Core.Test.MediaFiles.MediaInfo
 
             GivenSuccessfulScan();
 
-            Subject.Handle(new ArtistScannedEvent(_artist));
+            Subject.Handle(new ArtistScannedEvent(_artist, _artist.Path));
 
             Mocker.GetMock<IVideoFileInfoReader>()
                   .Verify(v => v.GetMediaInfo("media.flac"), Times.Never());
@@ -172,7 +172,7 @@ namespace NzbDrone.Core.Test.MediaFiles.MediaInfo
             GivenSuccessfulScan();
             GivenFailedScan(Path.Combine(_artist.Path, "media2.flac"));
 
-            Subject.Handle(new ArtistScannedEvent(_artist));
+            Subject.Handle(new ArtistScannedEvent(_artist, _artist.Path));
 
             Mocker.GetMock<IVideoFileInfoReader>()
                   .Verify(v => v.GetMediaInfo(Path.Combine(_artist.Path, "media.flac")), Times.Exactly(1));

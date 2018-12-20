@@ -23,6 +23,7 @@ namespace NzbDrone.Core.MediaFiles
     public interface IDiskScanService
     {
         void Scan(Artist artist);
+        void Scan(Artist artist, string path);
         string[] GetAudioFiles(string path, bool allDirectories = true);
         string[] GetNonAudioFiles(string path, bool allDirectories = true);
         List<string> FilterFiles(string basePath, IEnumerable<string> files);
@@ -99,11 +100,17 @@ namespace NzbDrone.Core.MediaFiles
                 }
 
                 CleanMediaFiles(artist, new List<string>());
-                CompletedScanning(artist);
+                CompletedScanning(artist, artist.Path);
 
                 return;
             }
 
+            Scan(artist, artist.Path);
+            RemoveEmptyArtistFolder(artist.Path);
+        }
+
+        public void Scan(Artist artist, string path)
+        {
             var musicFilesStopwatch = Stopwatch.StartNew();
             var mediaFileList = FilterFiles(artist.Path, GetAudioFiles(artist.Path)).ToList();
             musicFilesStopwatch.Stop();
@@ -111,14 +118,13 @@ namespace NzbDrone.Core.MediaFiles
 
             CleanMediaFiles(artist, mediaFileList);
 
+            mediaFileList = mediaFileList.Where(x => x.StartsWith(path)).ToList();
             var decisionsStopwatch = Stopwatch.StartNew();
             var decisions = _importDecisionMaker.GetImportDecisions(mediaFileList, artist);
             decisionsStopwatch.Stop();
             _logger.Trace("Import decisions complete for: {0} [{1}]", artist, decisionsStopwatch.Elapsed);
             _importApprovedTracks.Import(decisions, false);
-
-            RemoveEmptyArtistFolder(artist.Path);
-            CompletedScanning(artist);
+            CompletedScanning(artist, path);
         }
         
         private void CleanMediaFiles(Artist artist, List<string> mediaFileList)
@@ -127,10 +133,10 @@ namespace NzbDrone.Core.MediaFiles
             _mediaFileTableCleanupService.Clean(artist, mediaFileList);
         }
 
-        private void CompletedScanning(Artist artist)
+        private void CompletedScanning(Artist artist, string path)
         {
             _logger.Info("Completed scanning disk for {0}", artist.Name);
-            _eventAggregator.PublishEvent(new ArtistScannedEvent(artist));
+            _eventAggregator.PublishEvent(new ArtistScannedEvent(artist, path));
         }
 
         public string[] GetAudioFiles(string path, bool allDirectories = true)
@@ -213,7 +219,15 @@ namespace NzbDrone.Core.MediaFiles
             if (message.ArtistId.HasValue)
             {
                 var artist = _artistService.GetArtist(message.ArtistId.Value);
-                Scan(artist);
+
+                if (message.Path.IsNotNullOrWhiteSpace())
+                {
+                    Scan(artist, message.Path);
+                }
+                else
+                {
+                    Scan(artist);
+                }
             }
 
             else

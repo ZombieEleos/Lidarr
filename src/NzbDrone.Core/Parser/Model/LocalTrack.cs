@@ -18,7 +18,10 @@ namespace NzbDrone.Core.Parser.Model
 
         public string Path { get; set; }
         public long Size { get; set; }
-        public ParsedTrackInfo ParsedTrackInfo { get; set; }
+        public ParsedTrackInfo FileTrackInfo { get; set; }
+        public ParsedTrackInfo FolderTrackInfo { get; set; }
+        public ParsedAlbumInfo DownloadClientAlbumInfo { get; set; }
+        public List<string> AcoustIdResults { get; set; }
         public Artist Artist { get; set; }
         public Album Album { get; set; }
         public AlbumRelease Release { get; set; }
@@ -27,7 +30,8 @@ namespace NzbDrone.Core.Parser.Model
         public Language Language { get; set; }
         public MediaInfoModel MediaInfo { get; set; }
         public bool ExistingFile { get; set; }
-
+        public bool SceneSource { get; set; }
+        public string ReleaseGroup { get; set; }
 
         public override string ToString()
         {

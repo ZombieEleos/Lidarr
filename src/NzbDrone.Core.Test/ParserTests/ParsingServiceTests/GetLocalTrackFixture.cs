@@ -88,40 +88,40 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
             _parsedTrackInfo.ReleaseMBId = "";
         }
 
-        [Test]
-        public void should_find_album_with_title_no_MBID()
-        {
-            HasAlbumTitleNoReleaseId();
+        // [Test]
+        // public void should_find_album_with_title_no_MBID()
+        // {
+        //     HasAlbumTitleNoReleaseId();
 
-            var localTrack = Subject.GetLocalTrack("somfile.mp3", _fakeArtist, _parsedTrackInfo);
+        //     var localTrack = Subject.GetLocalTrack("somfile.mp3", _fakeArtist, _parsedTrackInfo);
 
-            localTrack.Artist.Id.Should().Be(_fakeArtist.Id);
-            localTrack.Album.Id.Should().Be(_fakeAlbum.Id);
-            localTrack.Tracks.First().Id.Should().Be(_fakeTrack.Id);
-        }
+        //     localTrack.Artist.Id.Should().Be(_fakeArtist.Id);
+        //     localTrack.Album.Id.Should().Be(_fakeAlbum.Id);
+        //     localTrack.Tracks.First().Id.Should().Be(_fakeTrack.Id);
+        // }
 
-        [Test]
-        public void should_find_album_with_release_MBID_no_title()
-        {
-            HasReleaseMbIdNoTitle();
+        // [Test]
+        // public void should_find_album_with_release_MBID_no_title()
+        // {
+        //     HasReleaseMbIdNoTitle();
 
-            var localTrack = Subject.GetLocalTrack("somfile.mp3", _fakeArtist, _parsedTrackInfo);
+        //     var localTrack = Subject.GetLocalTrack("somfile.mp3", _fakeArtist, _parsedTrackInfo);
 
-            localTrack.Artist.Id.Should().Be(_fakeArtist.Id);
-            localTrack.Album.Id.Should().Be(_fakeAlbum.Id);
-            localTrack.Tracks.First().Id.Should().Be(_fakeTrack.Id);
-        }
+        //     localTrack.Artist.Id.Should().Be(_fakeArtist.Id);
+        //     localTrack.Album.Id.Should().Be(_fakeAlbum.Id);
+        //     localTrack.Tracks.First().Id.Should().Be(_fakeTrack.Id);
+        // }
 
-        [Test]
-        public void should_not_find_album_with_no_release_MBID_no_title()
-        {
-            HasNoReleaseIdOrTitle();
+        // [Test]
+        // public void should_not_find_album_with_no_release_MBID_no_title()
+        // {
+        //     HasNoReleaseIdOrTitle();
             
-            var localTrack = Subject.GetLocalTrack("somfile.mp3", _fakeArtist, _parsedTrackInfo);
-            ExceptionVerification.ExpectedWarns(1);
+        //     var localTrack = Subject.GetLocalTrack("somfile.mp3", _fakeArtist, _parsedTrackInfo);
+        //     ExceptionVerification.ExpectedWarns(1);
 
-            localTrack.Should().BeNull();
+        //     localTrack.Should().BeNull();
 
-        }
+        // }
     }
 }

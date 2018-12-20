@@ -6,15 +6,16 @@ using NUnit.Framework;
 using NzbDrone.Core.DecisionEngine;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.MediaFiles.TrackImport;
-using NzbDrone.Core.Parser;
 using NzbDrone.Core.Parser.Model;
-using NzbDrone.Core.Profiles.Qualities;
+using NzbDrone.Core.Profiles;
 using NzbDrone.Core.Qualities;
 using NzbDrone.Core.Test.Framework;
 using NzbDrone.Core.Music;
 using NzbDrone.Test.Common;
 using FizzWare.NBuilder;
-using NzbDrone.Core.Languages;
+using NzbDrone.Core.Download;
+using NzbDrone.Core.MediaFiles.TrackImport.Aggregation;
+using NzbDrone.Core.Profiles.Qualities;
 using NzbDrone.Core.Profiles.Languages;
 
 namespace NzbDrone.Core.Test.MediaFiles.TrackImport
@@ -27,24 +28,24 @@ namespace NzbDrone.Core.Test.MediaFiles.TrackImport
         private Artist _artist;
         private QualityModel _quality;
 
-        private Mock<IImportDecisionEngineSpecification> _pass1;
-        private Mock<IImportDecisionEngineSpecification> _pass2;
-        private Mock<IImportDecisionEngineSpecification> _pass3;
+        private Mock<IImportDecisionEngineSpecification<LocalTrack>> _pass1;
+        private Mock<IImportDecisionEngineSpecification<LocalTrack>> _pass2;
+        private Mock<IImportDecisionEngineSpecification<LocalTrack>> _pass3;
 
-        private Mock<IImportDecisionEngineSpecification> _fail1;
-        private Mock<IImportDecisionEngineSpecification> _fail2;
-        private Mock<IImportDecisionEngineSpecification> _fail3;
+        private Mock<IImportDecisionEngineSpecification<LocalTrack>> _fail1;
+        private Mock<IImportDecisionEngineSpecification<LocalTrack>> _fail2;
+        private Mock<IImportDecisionEngineSpecification<LocalTrack>> _fail3;
 
         [SetUp]
         public void Setup()
         {
-            _pass1 = new Mock<IImportDecisionEngineSpecification>();
-            _pass2 = new Mock<IImportDecisionEngineSpecification>();
-            _pass3 = new Mock<IImportDecisionEngineSpecification>();
+            _pass1 = new Mock<IImportDecisionEngineSpecification<LocalTrack>>();
+            _pass2 = new Mock<IImportDecisionEngineSpecification<LocalTrack>>();
+            _pass3 = new Mock<IImportDecisionEngineSpecification<LocalTrack>>();
 
-            _fail1 = new Mock<IImportDecisionEngineSpecification>();
-            _fail2 = new Mock<IImportDecisionEngineSpecification>();
-            _fail3 = new Mock<IImportDecisionEngineSpecification>();
+            _fail1 = new Mock<IImportDecisionEngineSpecification<LocalTrack>>();
+            _fail2 = new Mock<IImportDecisionEngineSpecification<LocalTrack>>();
+            _fail3 = new Mock<IImportDecisionEngineSpecification<LocalTrack>>();
 
             _pass1.Setup(c => c.IsSatisfiedBy(It.IsAny<LocalTrack>())).Returns(Decision.Accept());
             _pass2.Setup(c => c.IsSatisfiedBy(It.IsAny<LocalTrack>())).Returns(Decision.Accept());
@@ -62,22 +63,17 @@ namespace NzbDrone.Core.Test.MediaFiles.TrackImport
             _quality = new QualityModel(Quality.MP3_256);
 
             _localTrack = new LocalTrack
-            { 
+            {
                 Artist = _artist,
                 Quality = _quality,
-                Language = Language.Spanish,
                 Tracks = new List<Track> { new Track() },
-                Path = @"C:\Test\Unsorted\The.Office.S03E115.DVDRip.Spanish.XviD-OSiTV.avi"
+                Path = @"C:\Test\Unsorted\The.Office.S03E115.DVDRip.XviD-OSiTV.avi"
             };
 
-            Mocker.GetMock<IParsingService>()
-                  .Setup(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), It.IsAny<ParsedTrackInfo>()))
-                  .Returns(_localTrack);
-
-            GivenVideoFiles(new List<string> { @"C:\Test\Unsorted\The.Office.S03E115.DVDRip.Spanish.XviD-OSiTV.avi".AsOsAgnostic() });
+            GivenVideoFiles(new List<string> { @"C:\Test\Unsorted\The.Office.S03E115.DVDRip.XviD-OSiTV.avi".AsOsAgnostic() });
         }
 
-        private void GivenSpecifications(params Mock<IImportDecisionEngineSpecification>[] mocks)
+        private void GivenSpecifications(params Mock<IImportDecisionEngineSpecification<LocalTrack>>[] mocks)
         {
             Mocker.SetConstant(mocks.Select(c => c.Object));
         }
@@ -91,12 +87,24 @@ namespace NzbDrone.Core.Test.MediaFiles.TrackImport
                   .Returns(_audioFiles);
         }
 
+        private void GivenAugmentationSuccess()
+        {
+            Mocker.GetMock<IAugmentingService>()
+                  .Setup(s => s.Augment(It.IsAny<LocalTrack>(), It.IsAny<bool>()))
+                  .Callback<LocalTrack, bool>((localTrack, otherFiles) =>
+                  {
+                      localTrack.Tracks = _localTrack.Tracks;
+                  });
+        }
+
         [Test]
         public void should_call_all_specifications()
         {
+            var downloadClientItem = Builder<DownloadClientItem>.CreateNew().Build();
+            GivenAugmentationSuccess();
             GivenSpecifications(_pass1, _pass2, _pass3, _fail1, _fail2, _fail3);
 
-            Subject.GetImportDecisions(_audioFiles, new Artist(), null);
+            Subject.GetImportDecisions(_audioFiles, new Artist(), null, downloadClientItem, null, false, false);
 
             _fail1.Verify(c => c.IsSatisfiedBy(_localTrack), Times.Once());
             _fail2.Verify(c => c.IsSatisfiedBy(_localTrack), Times.Once());
@@ -127,8 +135,9 @@ namespace NzbDrone.Core.Test.MediaFiles.TrackImport
         }
 
         [Test]
-        public void should_return_pass_if_all_specs_pass()
+        public void should_return_approved_if_all_specs_pass()
         {
+            GivenAugmentationSuccess();
             GivenSpecifications(_pass1, _pass2, _pass3);
 
             var result = Subject.GetImportDecisions(_audioFiles, new Artist());
@@ -139,6 +148,7 @@ namespace NzbDrone.Core.Test.MediaFiles.TrackImport
         [Test]
         public void should_have_same_number_of_rejections_as_specs_that_failed()
         {
+            GivenAugmentationSuccess();
             GivenSpecifications(_pass1, _pass2, _pass3, _fail1, _fail2, _fail3);
 
             var result = Subject.GetImportDecisions(_audioFiles, new Artist());
@@ -150,8 +160,8 @@ namespace NzbDrone.Core.Test.MediaFiles.TrackImport
         {
             GivenSpecifications(_pass1);
 
-            Mocker.GetMock<IParsingService>()
-                  .Setup(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), It.IsAny<ParsedTrackInfo>()))
+            Mocker.GetMock<IAugmentingService>()
+                  .Setup(c => c.Augment(It.IsAny<LocalTrack>(), It.IsAny<bool>()))
                   .Throws<TestException>();
 
             _audioFiles = new List<string>
@@ -165,103 +175,16 @@ namespace NzbDrone.Core.Test.MediaFiles.TrackImport
 
             Subject.GetImportDecisions(_audioFiles, _artist);
 
-            Mocker.GetMock<IParsingService>()
-                  .Verify(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), It.IsAny<ParsedTrackInfo>()), Times.Exactly(_audioFiles.Count));
+            Mocker.GetMock<IAugmentingService>()
+                  .Verify(c => c.Augment(It.IsAny<LocalTrack>(), It.IsAny<bool>()), Times.Exactly(_audioFiles.Count));
 
             ExceptionVerification.ExpectedErrors(3);
         }
 
         [Test]
-        public void should_use_file_quality_if_folder_quality_is_null()
-        {
-            GivenSpecifications(_pass1, _pass2, _pass3);
-            var expectedQuality = QualityParser.ParseQuality(_audioFiles.Single(), null, 0);
-
-            var result = Subject.GetImportDecisions(_audioFiles, _artist);
-            
-            result.Single().LocalTrack.Quality.Should().Be(expectedQuality);
-        }
-
-        [Test]
-        public void should_use_file_language_if_folder_language_is_null()
-        {
-            GivenSpecifications(_pass1, _pass2, _pass3);
-            var expectedLanguage = LanguageParser.ParseLanguage(_audioFiles.Single());
-
-            var result = Subject.GetImportDecisions(_audioFiles, _artist);
-
-            result.Single().LocalTrack.Language.Should().Be(expectedLanguage);
-        }
-
-    [Test]
-        public void should_use_file_quality_if_file_quality_was_determined_by_name()
-        {
-            GivenSpecifications(_pass1, _pass2, _pass3);
-            var expectedQuality = QualityParser.ParseQuality(_audioFiles.Single(), null, 0);
-
-            var result = Subject.GetImportDecisions(_audioFiles, _artist, new ParsedTrackInfo{Quality = new QualityModel(Quality.MP3_256) });
-
-            result.Single().LocalTrack.Quality.Should().Be(expectedQuality);
-        }
-
-        [Test]
-        public void should_use_folder_quality_when_file_quality_was_determined_by_the_extension()
-        {
-            GivenSpecifications(_pass1, _pass2, _pass3);
-            GivenVideoFiles(new string[] { @"C:\Test\Unsorted\The.Office.S03E115.mkv".AsOsAgnostic() });
-
-            _localTrack.Path = _audioFiles.Single();
-            _localTrack.Quality.QualitySource = QualitySource.Extension;
-            _localTrack.Quality.Quality = Quality.MP3_256;
-
-            var expectedQuality = new QualityModel(Quality.MP3_256);
-
-            var result = Subject.GetImportDecisions(_audioFiles, _artist, new ParsedTrackInfo { Quality = expectedQuality });
-
-            result.Single().LocalTrack.Quality.Should().Be(expectedQuality);
-        }
-
-        [Test]
-        public void should_use_folder_quality_when_greater_than_file_quality()
-        {
-            GivenSpecifications(_pass1, _pass2, _pass3);
-            GivenVideoFiles(new string[] { @"C:\Test\Unsorted\The.Office.S03E115.mkv".AsOsAgnostic() });
-
-            _localTrack.Path = _audioFiles.Single();
-            _localTrack.Quality.Quality = Quality.MP3_256;
-
-            var expectedQuality = new QualityModel(Quality.MP3_256);
-
-            var result = Subject.GetImportDecisions(_audioFiles, _artist, new ParsedTrackInfo { Quality = expectedQuality });
-
-            result.Single().LocalTrack.Quality.Should().Be(expectedQuality);
-        }
-
-        [Test]
-        public void should_use_folder_language_when_greater_than_file_language()
-        {
-            GivenSpecifications(_pass1, _pass2, _pass3);
-            GivenVideoFiles(new string[] { @"C:\Test\Unsorted\The.Office.S03E115.Spanish.mkv".AsOsAgnostic() });
-
-            _localTrack.Path = _audioFiles.Single();
-            _localTrack.Quality.Quality = Quality.MP3_320;
-            _localTrack.Language = Language.Spanish;
-
-            var expectedLanguage = Language.French;
-
-            var result = Subject.GetImportDecisions(_audioFiles, _artist, new ParsedTrackInfo { Language = expectedLanguage, Quality = new QualityModel(Quality.MP3_192) });
-
-            result.Single().LocalTrack.Language.Should().Be(expectedLanguage);
-        }
-
-[Test]
-        public void should_not_throw_if_episodes_are_not_found()
+        public void should_not_throw_if_tracks_are_not_found()
         {
             GivenSpecifications(_pass1);
-
-            Mocker.GetMock<IParsingService>()
-                  .Setup(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), It.IsAny<ParsedTrackInfo>()))
-                  .Returns(new LocalTrack() { Path = "test" });
 
             _audioFiles = new List<string>
                 {
@@ -274,127 +197,18 @@ namespace NzbDrone.Core.Test.MediaFiles.TrackImport
 
             var decisions = Subject.GetImportDecisions(_audioFiles, _artist);
 
-            Mocker.GetMock<IParsingService>()
-                  .Verify(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), It.IsAny<ParsedTrackInfo>()), Times.Exactly(_audioFiles.Count));
+            Mocker.GetMock<IAugmentingService>()
+                  .Verify(c => c.Augment(It.IsAny<LocalTrack>(), It.IsAny<bool>()), Times.Exactly(_audioFiles.Count));
 
             decisions.Should().HaveCount(3);
             decisions.First().Rejections.Should().NotBeEmpty();
         }
 
         [Test]
-        public void should_not_use_folder_for_full_season()
-        {
-            var videoFiles = new[]
-                             {
-                                 @"C:\Test\Unsorted\Artist.Title.S01\S01E01.mkv".AsOsAgnostic(),
-                                 @"C:\Test\Unsorted\Artist.Title.S01\S01E02.mkv".AsOsAgnostic(),
-                                 @"C:\Test\Unsorted\Artist.Title.S01\S01E03.mkv".AsOsAgnostic()
-                             };
-
-            GivenSpecifications(_pass1);
-            GivenVideoFiles(videoFiles);
-
-            var folderInfo = Parser.Parser.ParseMusicTitle("Artist.Title.S01");
-
-            Subject.GetImportDecisions(_audioFiles, _artist, folderInfo);
-
-            Mocker.GetMock<IParsingService>()
-                  .Verify(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), null), Times.Exactly(3));
-
-            Mocker.GetMock<IParsingService>()
-                  .Verify(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), It.Is<ParsedTrackInfo>(p => p != null)), Times.Never());
-        }
-
-        [Test]
-        public void should_not_use_folder_when_it_contains_more_than_one_valid_video_file()
-        {
-            var videoFiles = new[]
-                             {
-                                 @"C:\Test\Unsorted\Artist.Title.S01E01\S01E01.mkv".AsOsAgnostic(),
-                                 @"C:\Test\Unsorted\Artist.Title.S01E01\1x01.mkv".AsOsAgnostic()
-                             };
-
-            GivenSpecifications(_pass1);
-            GivenVideoFiles(videoFiles);
-
-            var folderInfo = Parser.Parser.ParseMusicTitle("Artist.Title.S01E01");
-
-            Subject.GetImportDecisions(_audioFiles, _artist, folderInfo);
-
-            Mocker.GetMock<IParsingService>()
-                  .Verify(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), null), Times.Exactly(2));
-
-            Mocker.GetMock<IParsingService>()
-                  .Verify(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), It.Is<ParsedTrackInfo>(p => p != null)), Times.Never());
-        }
-
-        [Test]
-        public void should_use_folder_when_only_one_video_file()
-        {
-            var videoFiles = new[]
-                             {
-                                 @"C:\Test\Unsorted\Artist.Title.S01E01\S01E01.mkv".AsOsAgnostic()
-                             };
-
-            GivenSpecifications(_pass1);
-            GivenVideoFiles(videoFiles);
-
-            var folderInfo = Parser.Parser.ParseMusicTitle("Artist.Title.S01E01");
-
-            Subject.GetImportDecisions(_audioFiles, _artist, folderInfo);
-
-            Mocker.GetMock<IParsingService>()
-                  .Verify(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), It.IsAny<ParsedTrackInfo>()), Times.Exactly(1));
-
-            Mocker.GetMock<IParsingService>()
-                  .Verify(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), null), Times.Never());
-        }
-
-        [Test]
-        public void should_not_use_folder_name_if_file_name_is_scene_name()
-        {
-            var videoFiles = new[]
-                             {
-                                 @"C:\Test\Unsorted\Artist.Title.S01E01.720p.HDTV-LOL\Artist.Title.S01E01.720p.HDTV-LOL.mkv".AsOsAgnostic()
-                             };
-
-            GivenSpecifications(_pass1);
-            GivenVideoFiles(videoFiles);
-
-            var folderInfo = Parser.Parser.ParseMusicTitle("Artist.Title.S01E01.720p.HDTV-LOL");
-
-            Subject.GetImportDecisions(_audioFiles, _artist, folderInfo);
-
-            Mocker.GetMock<IParsingService>()
-                  .Verify(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), null), Times.Exactly(1));
-
-            Mocker.GetMock<IParsingService>()
-                  .Verify(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), It.Is<ParsedTrackInfo>(p => p != null)), Times.Never());
-        }
-
-        [Test]
-        public void should_not_use_folder_quality_when_it_is_unknown()
-        {
-            GivenSpecifications(_pass1, _pass2, _pass3);
-
-            _artist.Profile = new Profile
-                              {
-                                  Items = Qualities.QualityFixture.GetDefaultQualities(Quality.MP3_256, Quality.Unknown)
-                              };
-
-
-            var folderQuality = new QualityModel(Quality.Unknown);
-
-            var result = Subject.GetImportDecisions(_audioFiles, _artist, new ParsedTrackInfo { Quality = folderQuality});
-
-            result.Single().LocalTrack.Quality.Should().Be(_quality);
-        }
-
-        [Test]
         public void should_return_a_decision_when_exception_is_caught()
         {
-            Mocker.GetMock<IParsingService>()
-                  .Setup(c => c.GetLocalTrack(It.IsAny<string>(), It.IsAny<Artist>(), It.IsAny<Album>(), It.IsAny<ParsedTrackInfo>()))
+            Mocker.GetMock<IAugmentingService>()
+                  .Setup(c => c.Augment(It.IsAny<LocalTrack>(), It.IsAny<bool>()))
                   .Throws<TestException>();
 
             _audioFiles = new List<string>

@@ -18,9 +18,11 @@ namespace NzbDrone.Core.Music
         List<Track> GetTracksByAlbum(int albumId);
         List<Track> GetTracksByRelease(int albumReleaseId);
         List<Track> GetTracksByForeignReleaseId(string foreignReleaseId);
+        List<Track> GetTracksByForeignTrackIds(List<string> foreignTrackId);
         List<Track> GetTracksByMedium(int albumId, int mediumNumber);
         List<Track> GetTracksByFileId(int fileId);
         List<Track> TracksWithFiles(int artistId);
+        List<Track> TracksWithoutFiles(int albumId);
         void SetFileId(int trackId, int fileId);
     }
 
@@ -97,6 +99,16 @@ namespace NzbDrone.Core.Music
             return Query.QueryText(query).ToList();
         }
 
+        public List<Track> GetTracksByForeignTrackIds(List<string> ids)
+        {
+            string query = string.Format("SELECT Tracks.* " +
+                                         "FROM Tracks " +
+                                         "WHERE ForeignTrackId IN ('{0}')",
+                                         string.Join("', '", ids));
+
+            return Query.QueryText(query).ToList();
+        }
+
         public List<Track> GetTracksByMedium(int albumId, int mediumNumber)
         {
             if (mediumNumber < 1)
@@ -133,6 +145,21 @@ namespace NzbDrone.Core.Music
                                          "WHERE Artists.Id == {0} " +
                                          "AND AlbumReleases.Monitored = 1 ",
                                          artistId);
+
+            return Query.QueryText(query).ToList();
+        }
+
+        public List<Track> TracksWithoutFiles(int albumId)
+        {
+            string query = string.Format("SELECT Tracks.* " +
+                                         "FROM Albums " +
+                                         "JOIN AlbumReleases ON AlbumReleases.AlbumId == Albums.Id " +
+                                         "JOIN Tracks ON Tracks.AlbumReleaseId == AlbumReleases.Id " +
+                                         "LEFT OUTER JOIN TrackFiles ON TrackFiles.Id == Tracks.TrackFileId " +
+                                         "WHERE Albums.Id == {0} " +
+                                         "AND AlbumReleases.Monitored = 1 " +
+                                         "AND TrackFiles.Id IS NULL",
+                                         albumId);
 
             return Query.QueryText(query).ToList();
         }

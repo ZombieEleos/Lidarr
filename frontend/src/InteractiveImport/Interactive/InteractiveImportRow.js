@@ -2,7 +2,7 @@ import PropTypes from 'prop-types';
 import React, { Component } from 'react';
 import formatBytes from 'Utilities/Number/formatBytes';
 import hasDifferentItems from 'Utilities/Object/hasDifferentItems';
-import { icons, kinds, tooltipPositions } from 'Helpers/Props';
+import { icons, kinds, tooltipPositions, sortDirections } from 'Helpers/Props';
 import Icon from 'Components/Icon';
 import TableRow from 'Components/Table/TableRow';
 import TableRowCell from 'Components/Table/Cells/TableRowCell';
@@ -167,11 +167,13 @@ class InteractiveImportRow extends Component {
       relativePath,
       artist,
       album,
+      albumReleaseId,
       tracks,
       quality,
       language,
       size,
       rejections,
+      tags,
       isSelected,
       onSelectedChange
     } = this.props;
@@ -185,7 +187,10 @@ class InteractiveImportRow extends Component {
     } = this.state;
 
     const artistName = artist ? artist.artistName : '';
-    const albumTitle = album ? album.title : '';
+    let albumTitle = '';
+    if (album) {
+      albumTitle = album.disambiguation ? `${album.title} (${album.disambiguation})` : album.title;
+    }
     const trackNumbers = tracks.map((track) => `${track.mediumNumber}x${track.trackNumber}`)
       .join(', ');
 
@@ -324,6 +329,11 @@ class InteractiveImportRow extends Component {
           id={id}
           artistId={artist && artist.id}
           albumId={album && album.id}
+          albumReleaseId={albumReleaseId}
+          rejections={rejections}
+          tags={tags}
+          sortKey='mediumNumber'
+          sortDirection={sortDirections.ASCENDING}
           filename={relativePath}
           onModalClose={this.onSelectTrackModalClose}
         />
@@ -355,11 +365,13 @@ InteractiveImportRow.propTypes = {
   relativePath: PropTypes.string.isRequired,
   artist: PropTypes.object,
   album: PropTypes.object,
+  albumReleaseId: PropTypes.number,
   tracks: PropTypes.arrayOf(PropTypes.object).isRequired,
   quality: PropTypes.object,
   language: PropTypes.object,
   size: PropTypes.number.isRequired,
   rejections: PropTypes.arrayOf(PropTypes.object).isRequired,
+  tags: PropTypes.object.isRequired,
   isSelected: PropTypes.bool,
   onSelectedChange: PropTypes.func.isRequired,
   onValidRowChange: PropTypes.func.isRequired

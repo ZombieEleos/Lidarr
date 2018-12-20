@@ -10,10 +10,12 @@ namespace NzbDrone.Core.MediaFiles.Events
     public class ArtistScannedEvent : IEvent
     {
         public Artist Artist { get; private set; }
+        public string Path { get; private set; }
 
-        public ArtistScannedEvent(Artist artist)
+        public ArtistScannedEvent(Artist artist, string path)
         {
             Artist = artist;
+            Path = path;
         }
     }
 }

@@ -50,7 +50,8 @@ class ArtistDetailsSeason extends Component {
     } = this.props;
 
     const expand = _.some(items, (item) => {
-      return isAfter(item.releaseDate) ||
+      return item.albumType === 'Album' ||
+             isAfter(item.releaseDate) ||
              isAfter(item.releaseDate, { days: -30 });
     });
 

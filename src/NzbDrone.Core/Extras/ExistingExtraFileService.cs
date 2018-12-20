@@ -33,15 +33,15 @@ namespace NzbDrone.Core.Extras
             var artist = message.Artist;
             var extraFiles = new List<ExtraFile>();
 
-            if (!_diskProvider.FolderExists(artist.Path))
+            if (!_diskProvider.FolderExists(message.Path))
             {
                 return;
             }
 
-            _logger.Debug("Looking for existing extra files in {0}", artist.Path);
+            _logger.Debug("Looking for existing extra files in {0}", message.Path);
 
-            var filesOnDisk = _diskScanService.GetNonAudioFiles(artist.Path);
-            var possibleExtraFiles = _diskScanService.FilterFiles(artist.Path, filesOnDisk);
+            var filesOnDisk = _diskScanService.GetNonAudioFiles(message.Path);
+            var possibleExtraFiles = _diskScanService.FilterFiles(message.Path, filesOnDisk);
 
             var filteredFiles = possibleExtraFiles;
             var importedFiles = new List<string>();
@@ -50,7 +50,7 @@ namespace NzbDrone.Core.Extras
             {
                 var imported = existingExtraFileImporter.ProcessFiles(artist, filteredFiles, importedFiles);
 
-                importedFiles.AddRange(imported.Select(f => Path.Combine(artist.Path, f.RelativePath)));
+                importedFiles.AddRange(imported.Select(f => Path.Combine(message.Path, f.RelativePath)));
             }
 
             _logger.Info("Found {0} extra files", extraFiles.Count);

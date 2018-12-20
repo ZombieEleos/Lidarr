@@ -5,6 +5,7 @@ namespace NzbDrone.Core.MediaFiles.Commands
     public class RescanArtistCommand : Command
     {
         public int? ArtistId { get; set; }
+        public string Path { get; set; }
 
         public override bool SendUpdatesToClient => true;
 
@@ -16,5 +17,12 @@ namespace NzbDrone.Core.MediaFiles.Commands
         {
             ArtistId = artistId;
         }
+
+        public RescanArtistCommand(int artistId, string path)
+        {
+            ArtistId = artistId;
+            Path = path;
+        }
+
     }
 }

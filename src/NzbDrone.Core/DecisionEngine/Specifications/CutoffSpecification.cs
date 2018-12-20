@@ -4,6 +4,7 @@ using NLog;
 using NzbDrone.Core.IndexerSearch.Definitions;
 using NzbDrone.Core.Parser.Model;
 using NzbDrone.Core.MediaFiles;
+using NzbDrone.Core.Music;
 
 namespace NzbDrone.Core.DecisionEngine.Specifications
 {
@@ -11,13 +12,18 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
     {
         private readonly UpgradableSpecification _upgradableSpecification;
         private readonly IMediaFileService _mediaFileService;
+        private readonly ITrackService _trackService;
         private readonly Logger _logger;
 
-        public CutoffSpecification(UpgradableSpecification upgradableSpecification, Logger logger, IMediaFileService mediaFileService)
+        public CutoffSpecification(UpgradableSpecification upgradableSpecification,
+                                   Logger logger,
+                                   IMediaFileService mediaFileService,
+                                   ITrackService trackService)
         {
             _upgradableSpecification = upgradableSpecification;
             _logger = logger;
             _mediaFileService = mediaFileService;
+            _trackService = trackService;
         }
 
         public SpecificationPriority Priority => SpecificationPriority.Default;
@@ -30,9 +36,10 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
 
             foreach (var album in subject.Albums)
             {
+                var tracksMissing =_trackService.TracksWithoutFiles(album.Id).Any();
                 var trackFiles = _mediaFileService.GetFilesByAlbum(album.Id);
 
-                if (trackFiles.Any())
+                if (!tracksMissing && trackFiles.Any())
                 {
                     var lowestQuality = trackFiles.Select(c => c.Quality).OrderBy(c => c.Quality.Id).First();
 

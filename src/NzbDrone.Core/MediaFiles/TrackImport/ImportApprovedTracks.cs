@@ -8,16 +8,18 @@ using NzbDrone.Core.Download;
 using NzbDrone.Core.Extras;
 using NzbDrone.Core.Languages;
 using NzbDrone.Core.MediaFiles.Events;
+using NzbDrone.Core.MediaFiles.MediaInfo;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Music;
 using NzbDrone.Core.Music.Events;
+using NzbDrone.Core.Parser.Model;
 using NzbDrone.Core.Qualities;
 
 namespace NzbDrone.Core.MediaFiles.TrackImport
 {
     public interface IImportApprovedTracks
     {
-        List<ImportResult> Import(List<ImportDecision> decisions, bool newDownload, DownloadClientItem downloadClientItem = null, ImportMode importMode = ImportMode.Auto);
+        List<ImportResult> Import(List<ImportDecision<LocalTrack>> decisions, bool newDownload, DownloadClientItem downloadClientItem = null, ImportMode importMode = ImportMode.Auto);
     }
 
     public class ImportApprovedTracks : IImportApprovedTracks
@@ -28,6 +30,7 @@ namespace NzbDrone.Core.MediaFiles.TrackImport
         private readonly IDiskProvider _diskProvider;
         private readonly IReleaseService _releaseService;
         private readonly IEventAggregator _eventAggregator;
+        private readonly IVideoFileInfoReader _videoFileInfoReader;
         private readonly Logger _logger;
 
         public ImportApprovedTracks(IUpgradeMediaFiles trackFileUpgrader,
@@ -36,6 +39,7 @@ namespace NzbDrone.Core.MediaFiles.TrackImport
                                     IDiskProvider diskProvider,
                                     IReleaseService releaseService,
                                     IEventAggregator eventAggregator,
+                                    IVideoFileInfoReader videoFileInfoReader,
                                     Logger logger)
         {
             _trackFileUpgrader = trackFileUpgrader;
@@ -44,16 +48,17 @@ namespace NzbDrone.Core.MediaFiles.TrackImport
             _diskProvider = diskProvider;
             _releaseService = releaseService;
             _eventAggregator = eventAggregator;
+            _videoFileInfoReader = videoFileInfoReader;
             _logger = logger;
         }
 
-        public List<ImportResult> Import(List<ImportDecision> decisions, bool newDownload, DownloadClientItem downloadClientItem = null, ImportMode importMode = ImportMode.Auto)
+        public List<ImportResult> Import(List<ImportDecision<LocalTrack>> decisions, bool newDownload, DownloadClientItem downloadClientItem = null, ImportMode importMode = ImportMode.Auto)
         {
             var qualifiedImports = decisions.Where(c => c.Approved)
-               .GroupBy(c => c.LocalTrack.Artist.Id, (i, s) => s
-                   .OrderByDescending(c => c.LocalTrack.Quality, new QualityModelComparer(s.First().LocalTrack.Artist.Profile))
-                   .ThenByDescending(c => c.LocalTrack.Language, new LanguageComparer(s.First().LocalTrack.Artist.LanguageProfile))
-                   .ThenByDescending(c => c.LocalTrack.Size))
+               .GroupBy(c => c.Item.Artist.Id, (i, s) => s
+                   .OrderByDescending(c => c.Item.Quality, new QualityModelComparer(s.First().Item.Artist.Profile))
+                   .ThenByDescending(c => c.Item.Language, new LanguageComparer(s.First().Item.Artist.LanguageProfile))
+                   .ThenByDescending(c => c.Item.Size))
                .SelectMany(c => c)
                .ToList();
 
@@ -61,32 +66,47 @@ namespace NzbDrone.Core.MediaFiles.TrackImport
             var allImportedTrackFiles = new List<TrackFile>();
             var allOldTrackFiles = new List<TrackFile>();
 
-            var albumDecisions = decisions.Where(e => e.LocalTrack.Album != null)
-                .GroupBy(e => e.LocalTrack.Album.Id).ToList();
+            var albumDecisions = decisions.Where(e => e.Item.Album != null)
+                .GroupBy(e => e.Item.Album.Id).ToList();
 
             foreach (var albumDecision in albumDecisions)
             {
-                // set the correct release to be monitored after doing the import
-                var album = albumDecision.First().LocalTrack.Album;
-                var release = albumDecision.First().LocalTrack.Release;
-                _logger.Debug("Updating release to {0} [{1} tracks]", release, release.TrackCount);
-                _releaseService.SetMonitored(release);
+                if (albumDecision.Any(x => x.Approved))
+                {
+                    // if we are importing a new release, delete all old files and don't attempt to upgrade
+                    var album = albumDecision.First().Item.Album;
+                    var currentRelease = album.AlbumReleases.Value.Single(x => x.Monitored);
+                    var newRelease = albumDecision.First().Item.Release;
+                    if (currentRelease.Id != newRelease.Id)
+                    {
+                        var previousFiles = _mediaFileService.GetFilesByAlbum(album.Id);
 
-                // Publish album edited event.
-                // Deliberatly don't put in the old album since we don't want to trigger an ArtistScan.
-                _eventAggregator.PublishEvent(new AlbumEditedEvent(album, album));
+                        foreach (var previousFile in previousFiles)
+                        {
+                            _mediaFileService.Delete(previousFile, DeleteMediaFileReason.ManualOverride);
+                        }
+                        
+                        // set the correct release to be monitored before importing the new files
+                        _logger.Debug("Updating release to {0} [{1} tracks]", newRelease, newRelease.TrackCount);
+                        _releaseService.SetMonitored(newRelease);
+                    
+                        // Publish album edited event.
+                        // Deliberatly don't put in the old album since we don't want to trigger an ArtistScan.
+                        _eventAggregator.PublishEvent(new AlbumEditedEvent(album, album));
+                    }
+                }
             }
 
-            foreach (var importDecision in qualifiedImports.OrderBy(e => e.LocalTrack.Tracks.Select(track => track.AbsoluteTrackNumber).MinOrDefault())
-                                                           .ThenByDescending(e => e.LocalTrack.Size))
+            foreach (var importDecision in qualifiedImports.OrderBy(e => e.Item.Tracks.Select(track => track.AbsoluteTrackNumber).MinOrDefault())
+                                                           .ThenByDescending(e => e.Item.Size))
             {
-                var localTrack = importDecision.LocalTrack;
+                var localTrack = importDecision.Item;
                 var oldFiles = new List<TrackFile>();
 
                 try
                 {
                     //check if already imported
-                    if (importResults.SelectMany(r => r.ImportDecision.LocalTrack.Tracks)
+                    if (importResults.SelectMany(r => r.ImportDecision.Item.Tracks)
                                          .Select(e => e.Id)
                                          .Intersect(localTrack.Tracks.Select(e => e.Id))
                                          .Any())
@@ -100,9 +120,9 @@ namespace NzbDrone.Core.MediaFiles.TrackImport
                         Path = localTrack.Path.CleanFilePath(),
                         Size = _diskProvider.GetFileSize(localTrack.Path),
                         DateAdded = DateTime.UtcNow,
-                        ReleaseGroup = localTrack.ParsedTrackInfo.ReleaseGroup,
+                        ReleaseGroup = localTrack.ReleaseGroup,
                         Quality = localTrack.Quality,
-                        MediaInfo = localTrack.MediaInfo,
+                        MediaInfo = _videoFileInfoReader.GetMediaInfo(localTrack.Path),
                         Language = localTrack.Language,
                         AlbumId = localTrack.Album.Id,
                         Tracks = localTrack.Tracks
@@ -182,19 +202,21 @@ namespace NzbDrone.Core.MediaFiles.TrackImport
                 }
             }
 
-            var albumImports = importResults.Where(e => e.ImportDecision.LocalTrack.Album != null)
-                .GroupBy(e => e.ImportDecision.LocalTrack.Album.Id).ToList();
+            var albumImports = importResults.Where(e => e.ImportDecision.Item.Album != null)
+                .GroupBy(e => e.ImportDecision.Item.Album.Id).ToList();
 
             foreach (var albumImport in albumImports)
             {
-                var album = albumImport.First().ImportDecision.LocalTrack.Album;
-                var artist = albumImport.First().ImportDecision.LocalTrack.Artist;
+                var release = albumImport.First().ImportDecision.Item.Release;
+                var album = albumImport.First().ImportDecision.Item.Album;
+                var artist = albumImport.First().ImportDecision.Item.Artist;
 
                 if (albumImport.Where(e => e.Errors.Count == 0).ToList().Count > 0 && artist != null && album != null)
                 {
                     _eventAggregator.PublishEvent(new AlbumImportedEvent(
                         artist,
                         album,
+                        release,
                         allImportedTrackFiles.Where(s => s.AlbumId == album.Id).ToList(),
                         allOldTrackFiles.Where(s => s.AlbumId == album.Id).ToList(), newDownload,
                         downloadClientItem));

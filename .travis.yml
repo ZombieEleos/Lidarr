@@ -2,6 +2,11 @@ language: csharp
 os:
   - linux
   - osx
+addons:
+  apt:
+    packages:
+      - libchromaprint-tools
+    update: true
 solution: src/Lidarr.sln
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi

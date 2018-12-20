@@ -1,0 +1,65 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using NLog;
+using NzbDrone.Common.Disk;
+using NzbDrone.Core.MediaFiles.TrackImport.Aggregation.Aggregators;
+using NzbDrone.Core.MediaFiles.MediaInfo;
+using NzbDrone.Core.Parser.Model;
+
+namespace NzbDrone.Core.MediaFiles.TrackImport.Aggregation
+{
+    public interface IAugmentingService
+    {
+        LocalTrack Augment(LocalTrack localTrack, bool otherFiles);
+    }
+
+    public class AugmentingService : IAugmentingService
+    {
+        private readonly IEnumerable<IAggregateLocalTrack> _augmenters;
+        private readonly IDiskProvider _diskProvider;
+        private readonly IVideoFileInfoReader _videoFileInfoReader;
+        private readonly Logger _logger;
+
+        public AugmentingService(IEnumerable<IAggregateLocalTrack> augmenters,
+                                 IDiskProvider diskProvider,
+                                 IVideoFileInfoReader videoFileInfoReader,
+                                 Logger logger)
+        {
+            _augmenters = augmenters;
+            _diskProvider = diskProvider;
+            _videoFileInfoReader = videoFileInfoReader;
+            _logger = logger;
+        }
+
+        public LocalTrack Augment(LocalTrack localTrack, bool otherFiles)
+        {
+            if (localTrack.DownloadClientAlbumInfo == null &&
+                localTrack.FolderTrackInfo == null &&
+                localTrack.FileTrackInfo == null)
+            {
+                if (MediaFileExtensions.Extensions.Contains(Path.GetExtension(localTrack.Path)))
+                {
+                    throw new AugmentingFailedException("Unable to parse episode info from path: {0}", localTrack.Path);
+                }
+            }
+
+            localTrack.Size = _diskProvider.GetFileSize(localTrack.Path);
+            localTrack.MediaInfo = _videoFileInfoReader.GetMediaInfo(localTrack.Path);
+
+            foreach (var augmenter in _augmenters)
+            {
+                try
+                {
+                    augmenter.Aggregate(localTrack, otherFiles);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, ex.Message);
+                }
+            }
+
+            return localTrack;
+        }
+    }
+}
