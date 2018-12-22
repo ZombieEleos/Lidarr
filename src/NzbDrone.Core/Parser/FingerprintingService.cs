@@ -86,7 +86,7 @@ namespace NzbDrone.Core.Parser
             }
 
             // on OSX / Windows, we have put fpcalc in the application folder
-            path = AppDomain.CurrentDomain.BaseDirectory + "/fpcalc";
+            path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "fpcalc");
             if (OsInfo.IsWindows)
             {
                 path += ".exe";
